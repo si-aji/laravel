@@ -1,4 +1,4 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 
 const resources = [
     {
@@ -78,8 +78,15 @@ export default function Welcome() {
                                 The Laravel app is running. Start with a route, shape the page, and let the framework handle the request lifecycle.
                             </p>
                             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
+                                <Link className="inline-flex min-h-11 items-center rounded-sm bg-[#eeeeec] px-5 font-medium text-[#1C1C1A] transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FF4433]" href="/guest/sign-in">
+                                    Guest sign-in
+                                </Link>
+                                <Link className="inline-flex min-h-11 items-center text-sm text-[#C5C1B8] underline decoration-[#625e57] underline-offset-4 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#FF4433]" href="/sign-in">
+                                    Sign in options
+                                </Link>
+                            </div>
+                            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
                                 <ResourceLink
-                                    className="rounded-sm bg-[#eeeeec] px-5 text-[#1C1C1A] no-underline hover:bg-white hover:text-[#1C1C1A]"
                                     href="https://laravel.com/docs"
                                 >
                                     Read Laravel docs
