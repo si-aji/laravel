@@ -146,3 +146,13 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
 
 </laravel-boost-guidelines>
+
+## UI design and layouts
+
+- Read `DESIGN-SYSTEM.md` before changing pages, components, or styling.
+- Keep shared UI in `resources/js/Components/` and the four area layouts in `resources/js/Layouts/`.
+- Assign every Inertia page to the public, auth, admin, or guest layout in `resources/js/app.jsx`. Do not duplicate layout chrome in pages or infer a dashboard's layout from its URL prefix alone; sign-in pages use the auth layout.
+- Preserve the separate admin and guest authentication guards. Only add navigation to implemented destinations and only display real application data.
+- Video library and upload-control endpoints belong in `routes/web.php` under `auth:web`, using browser sessions and CSRF protection, not `/api` or bearer tokens. The library is shared across admins; multipart sessions can only be controlled by their uploader.
+- Reuse the package's `VideoLibraryService` for draft creation, metadata updates, signing/resuming linked uploads, completion, and deletion. Its shared cache locks serialize these operations; do not duplicate that lifecycle in the application.
+- Prefer reusable, project-owned controls over browser-native prompts (`alert`, `confirm`, `prompt`) and raw `<select>` controls when custom UI is needed. Preserve accessible names, keyboard behavior, focus handling, and visible states. A browser before-unload warning is acceptable only where the browser controls the prompt (such as refresh or close).

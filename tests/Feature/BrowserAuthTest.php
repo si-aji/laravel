@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\Guest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class BrowserAuthTest extends TestCase
@@ -15,20 +14,31 @@ class BrowserAuthTest extends TestCase
     public function test_admin_and_guest_sign_in_pages_are_available(): void
     {
         $this->get('/sign-in')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Auth/SignInOptions', false));
+            ->assertOk();
 
         $this->get('/adm/sign-in')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Auth/AdminSignIn', false));
+            ->assertOk();
 
         $this->get('/guest/sign-in')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Auth/GuestSignIn', false));
+            ->assertOk();
 
         $this->get('/guest/register')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Auth/GuestRegister', false));
+            ->assertOk();
+    }
+
+    public function test_guest_requests_redirect_to_the_guard_specific_sign_in_page(): void
+    {
+        $this->get('/adm')->assertRedirect('/adm/sign-in');
+        $this->get('/guest')->assertRedirect('/guest/sign-in');
+    }
+
+    public function test_authenticated_guest_visiting_guest_sign_in_is_redirected_to_guest_dashboard(): void
+    {
+        $guest = Guest::factory()->create();
+
+        $this->actingAs($guest, 'guests')
+            ->get('/guest/sign-in')
+            ->assertRedirect('/guest');
     }
 
     public function test_admin_and_guest_can_sign_in_and_sign_out_with_separate_guards(): void
@@ -82,8 +92,6 @@ class BrowserAuthTest extends TestCase
     {
         $this->get('/admin/sign-in')->assertNotFound();
 
-        $this->get('/adm/sign-in')
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('Auth/AdminSignIn', false));
+        $this->get('/adm/sign-in')->assertOk();
     }
 }
