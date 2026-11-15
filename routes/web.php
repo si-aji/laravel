@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\AdminVideoLibraryController;
 use App\Http\Controllers\Web\Auth\BrowserAuthController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,6 +34,17 @@ Route::middleware('guest:guests')->group(function () {
 Route::middleware('auth:web')->group(function () {
     Route::get('/adm', [BrowserAuthController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::post('/adm/sign-out', [BrowserAuthController::class, 'signOutAdmin'])->name('admin.sign-out');
+
+    Route::prefix('/adm/videos')->name('admin.videos.')->group(function () {
+        Route::get('/', [AdminVideoLibraryController::class, 'index'])->name('index');
+        Route::post('/uploads', [AdminVideoLibraryController::class, 'initiate'])->name('uploads.initiate');
+        Route::post('/uploads/{uploadId}/parts', [AdminVideoLibraryController::class, 'signPart'])->name('uploads.parts.sign');
+        Route::get('/uploads/{uploadId}', [AdminVideoLibraryController::class, 'resume'])->name('uploads.resume');
+        Route::post('/uploads/{uploadId}/complete', [AdminVideoLibraryController::class, 'complete'])->name('uploads.complete');
+        Route::delete('/uploads/{uploadId}', [AdminVideoLibraryController::class, 'abort'])->name('uploads.abort');
+        Route::patch('/{videoId}', [AdminVideoLibraryController::class, 'update'])->name('update');
+        Route::delete('/{videoId}', [AdminVideoLibraryController::class, 'destroy'])->name('destroy');
+    });
 });
 
 Route::middleware('auth:guests')->group(function () {
