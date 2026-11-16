@@ -1,10 +1,16 @@
-import AuthLayout from './AuthLayout';
+import { Head, Link } from '@inertiajs/react';
 import SignInForm from './SignInForm';
 
 export default function AdminSignIn() {
     return (
-        <AuthLayout eyebrow="Admin access" title="Sign in to manage the service">
+        <>
+            <Head title="Admin sign-in" />
+            <div className="page-heading">
+                <h1>Admin sign-in</h1>
+                <p>Use your administrator account to enter the workspace.</p>
+            </div>
             <SignInForm action="/adm/sign-in" submitLabel="Sign in as admin" />
-        </AuthLayout>
+            <p className="form-footer">Looking for your guest account? <Link className="text-link" href="/guest/sign-in">Guest sign-in</Link></p>
+        </>
     );
 }

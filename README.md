@@ -7,6 +7,52 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Admin video library
+
+The shared library is available at `/adm/videos` after admin sign-in. It supports
+one multipart video upload at a time per tab, title/description editing, and
+permanent deletion of both the stored object and database record. Only the
+uploader can sign, resume, complete, or cancel their upload session.
+
+Configure the `spaces` disk using the `DIGITALOCEAN_SPACES_*` values in
+`.env.example`. `VIDEO_ON_DEMAND_STORAGE_DISK` selects that disk; the upload policy
+defaults to 500 MiB, 64 MiB parts, and a 24-hour session lifetime. The browser
+uploads directly to the bucket using short-lived signed URLs. Laravel handles
+authenticated session control through `routes/web.php`, with CSRF protection.
+
+The bucket must be private. Configure CORS to allow the application's exact
+origin, `PUT` requests, required signed headers, and an exposed `ETag` response
+header. Allow preflight requests at the provider. Grant server credentials the
+multipart, list-parts, head-object, abort, and delete permissions the package
+requires. Some S3-compatible providers require
+`DIGITALOCEAN_SPACES_USE_PATH_STYLE_ENDPOINT=true`; use the provider's guidance.
+Do not log signed URLs or place storage credentials in the frontend.
+
+Keep the tab open during transfer. Admin navigation keeps uploading; closing or
+refreshing the page stops it. Reselect the original unchanged file to resume
+confirmed parts. Save metadata edits before leaving. Expired sessions must be
+cancelled/deleted and restarted. Playback and transcoding are not included.
+
+Run Laravel's scheduler in deployment: the hourly package cleanup aborts expired
+upload sessions. Also configure a bucket lifecycle rule for incomplete multipart
+uploads. Use a shared, lock-capable cache store across application instances.
+
+Package lifecycle changes belong in `../vod-package/`. Commit/push them to
+`main`, update `pasukanamal/pasukan-vod` through Composer, and publish only required
+new assets/migrations; never patch `vendor/` manually.
+
+Verification:
+
+```bash
+php artisan test --compact tests/Feature/AdminVideoLibraryTest.php
+npm run test:uploads
+npm run build
+```
+
+Cloud interactions in automated tests are mocked; perform a small real upload,
+resume, and delete check against the configured provider after setting its CORS
+and permissions.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

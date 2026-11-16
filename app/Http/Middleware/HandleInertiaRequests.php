@@ -38,6 +38,8 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'appName' => config('app.name', 'Laravel'),
+            'account' => fn () => $request->user('web')?->only(['name', 'email']),
+            'adminId' => fn () => $request->user('web')?->getAuthIdentifier(),
         ];
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Web\Admin\VideoController;
+use App\Http\Controllers\Web\Admin\VideoUploadController;
 use App\Http\Controllers\Web\Auth\BrowserAuthController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,6 +35,16 @@ Route::middleware('guest:guests')->group(function () {
 Route::middleware('auth:web')->group(function () {
     Route::get('/adm', [BrowserAuthController::class, 'adminDashboard'])->name('admin.dashboard');
     Route::post('/adm/sign-out', [BrowserAuthController::class, 'signOutAdmin'])->name('admin.sign-out');
+    Route::get('/adm/videos', [VideoController::class, 'index'])->name('admin.videos.index');
+    Route::get('/adm/videos/upload', [VideoController::class, 'create'])->name('admin.videos.create');
+    Route::get('/adm/videos/{video}/edit', [VideoController::class, 'edit'])->name('admin.videos.edit');
+    Route::patch('/adm/videos/{video}', [VideoController::class, 'update'])->name('admin.videos.update');
+    Route::delete('/adm/videos/{video}', [VideoController::class, 'destroy'])->name('admin.videos.destroy');
+    Route::post('/adm/video-uploads', [VideoUploadController::class, 'store'])->middleware('throttle:20,1')->name('admin.video-uploads.store');
+    Route::get('/adm/video-uploads/{upload}', [VideoUploadController::class, 'show'])->name('admin.video-uploads.show');
+    Route::post('/adm/video-uploads/{upload}/parts/{part}', [VideoUploadController::class, 'sign'])->whereNumber('part')->middleware('throttle:600,1')->name('admin.video-uploads.sign');
+    Route::post('/adm/videos/{video}/complete-upload', [VideoUploadController::class, 'complete'])->name('admin.video-uploads.complete');
+    Route::delete('/adm/video-uploads/{upload}', [VideoUploadController::class, 'destroy'])->name('admin.video-uploads.destroy');
 });
 
 Route::middleware('auth:guests')->group(function () {
