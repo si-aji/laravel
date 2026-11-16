@@ -137,11 +137,13 @@ class AdminVideoLibraryTest extends TestCase
             'stream.example.test/v1/streams' => Http::response([
                 'jobId' => 'job-123',
                 'status' => 'queued',
+                'progress' => 0,
                 'statusUrl' => 'https://stream.example.test/v1/jobs/job-123',
             ], 202),
             'stream.example.test/v1/jobs/job-123' => Http::response([
                 'jobId' => 'job-123',
                 'status' => 'completed',
+                'progress' => 100,
                 'manifestUrl' => 'https://media.example.test/hls/package/master.m3u8',
             ]),
         ]);
@@ -151,7 +153,8 @@ class AdminVideoLibraryTest extends TestCase
             ->postJson('/adm/videos/'.$video->id.'/stream')
             ->assertAccepted()
             ->assertJsonPath('job.jobId', 'job-123')
-            ->assertJsonPath('job.status', 'queued');
+            ->assertJsonPath('job.status', 'queued')
+            ->assertJsonPath('job.progress', 0);
         $this->assertSame('job-123', $video->refresh()->stream_job_id);
 
         $this->actingAs(User::factory()->create(), 'web')
@@ -161,6 +164,7 @@ class AdminVideoLibraryTest extends TestCase
         $this->getJson('/adm/videos/'.$video->id.'/stream')
             ->assertOk()
             ->assertJsonPath('job.status', 'completed')
+            ->assertJsonPath('job.progress', 100)
             ->assertJsonPath('job.manifestUrl', route('admin.videos.playback.manifest', $video));
 
         Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://stream.example.test/v1/streams'
@@ -271,6 +275,46 @@ class AdminVideoLibraryTest extends TestCase
         $this->assertNull(Video::query()->find($video->id));
     }
 
+    public function test_deleting_a_video_also_deletes_its_hls_job(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+        ]);
+        Http::fake(['stream.example.test/v1/jobs/job-123' => Http::response([], 204)]);
+        $video = $this->video(User::factory()->create(), ['stream_job_id' => 'job-123']);
+        Storage::disk('library-test')->put($video->path, 'video bytes');
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->deleteJson('/adm/videos/'.$video->id)
+            ->assertOk();
+
+        Http::assertSent(fn (ClientRequest $request): bool => $request->method() === 'DELETE'
+            && $request->url() === 'https://stream.example.test/v1/jobs/job-123'
+            && $request->hasHeader('Authorization', 'Bearer stream-test-token'));
+        Storage::disk('library-test')->assertMissing($video->path);
+        $this->assertNull(Video::query()->find($video->id));
+    }
+
+    public function test_video_and_source_are_kept_if_the_hls_job_cannot_be_deleted(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+        ]);
+        Http::fake(['stream.example.test/v1/jobs/job-123' => Http::response([], 502)]);
+        $video = $this->video(User::factory()->create(), ['stream_job_id' => 'job-123']);
+        Storage::disk('library-test')->put($video->path, 'video bytes');
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->deleteJson('/adm/videos/'.$video->id)
+            ->assertStatus(503)
+            ->assertJsonPath('message', 'The HLS files could not be deleted, so the video was kept. Try again.');
+
+        Storage::disk('library-test')->assertExists($video->path);
+        $this->assertNotNull($video->refresh());
+    }
+
     public function test_failed_deletion_keeps_a_retriable_record_and_prevents_edits(): void
     {
         $video = $this->video(User::factory()->create());
@@ -291,6 +335,18 @@ class AdminVideoLibraryTest extends TestCase
 
     public function test_multipart_sign_resume_complete_and_completion_retry_use_the_package(): void
     {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+            'video-ondemand.stream.profile' => 'hls-standard',
+        ]);
+        Http::fake([
+            'stream.example.test/v1/streams' => Http::response([
+                'jobId' => 'job-after-upload',
+                'status' => 'queued',
+                'statusUrl' => 'https://stream.example.test/v1/jobs/job-after-upload',
+            ], 202),
+        ]);
         $handler = new MockHandler([
             new Result(['Uploads' => []]), new Result(['UploadId' => 'cloud-upload']),
             new Result(['Parts' => [['PartNumber' => 1, 'ETag' => '"one"', 'Size' => 5 * 1024 * 1024]], 'IsTruncated' => false]),
@@ -306,12 +362,54 @@ class AdminVideoLibraryTest extends TestCase
         $this->postJson(str_replace('__PART__', '2', $start['part_url']))->assertOk()->assertJsonStructure(['url', 'headers', 'expires_at']);
         $this->getJson($start['resume_url'])->assertOk()->assertJsonPath('parts.0.etag', '"one"');
         $parts = ['parts' => [['part_number' => 1, 'etag' => '"one"'], ['part_number' => 2, 'etag' => '"two"']]];
-        $this->postJson($start['complete_url'], $parts)->assertOk()->assertJsonPath('video_id', $start['video_id']);
-        $this->postJson($start['complete_url'], $parts)->assertOk()->assertJsonPath('video_id', $start['video_id']);
+        $this->postJson($start['complete_url'], $parts)
+            ->assertOk()
+            ->assertJsonPath('video_id', $start['video_id'])
+            ->assertJsonPath('stream_status', 'queued');
+        $this->postJson($start['complete_url'], $parts)
+            ->assertOk()
+            ->assertJsonPath('video_id', $start['video_id'])
+            ->assertJsonPath('stream_status', 'queued');
         $this->assertSame(1, Video::query()->count());
         $this->assertSame('ready', Video::query()->first()->status);
+        $this->assertSame('job-after-upload', Video::query()->first()->stream_job_id);
         $this->assertSame('My lesson', Video::query()->first()->title);
         $this->assertSame(0, VideoUpload::query()->count());
+        Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://stream.example.test/v1/streams'
+            && $request['bucket'] === 'test-bucket'
+            && $request['key'] === Video::query()->first()->path
+            && $request['profile'] === 'hls-standard');
+    }
+
+    public function test_stream_service_failure_does_not_turn_a_successful_upload_into_a_failure(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+        ]);
+        Http::fake(['stream.example.test/v1/streams' => Http::response([], 503)]);
+        $handler = new MockHandler([
+            new Result(['Uploads' => []]), new Result(['UploadId' => 'cloud-upload']),
+            new Result(['Parts' => [
+                ['PartNumber' => 1, 'ETag' => '"one"', 'Size' => 5 * 1024 * 1024],
+                ['PartNumber' => 2, 'ETag' => '"two"', 'Size' => 1024 * 1024],
+            ], 'IsTruncated' => false]),
+            new Result([]), new Result(['ContentLength' => 6 * 1024 * 1024, 'ContentType' => 'video/mp4']),
+        ]);
+        $this->s3($handler);
+        $start = $this->actingAs(User::factory()->create(), 'web')
+            ->postJson('/adm/video-uploads', $this->uploadData())->assertCreated()->json();
+        $this->postJson(str_replace('__PART__', '1', $start['part_url']))->assertOk();
+        $this->postJson(str_replace('__PART__', '2', $start['part_url']))->assertOk();
+
+        $this->postJson($start['complete_url'], [
+            'parts' => [['part_number' => 1, 'etag' => '"one"'], ['part_number' => 2, 'etag' => '"two"']],
+        ])->assertOk()
+            ->assertJsonPath('stream_status', null);
+
+        $video = Video::query()->findOrFail($start['video_id']);
+        $this->assertSame('ready', $video->status);
+        $this->assertNull($video->stream_job_id);
     }
 
     public function test_storage_abort_failure_keeps_the_draft_and_session_for_retry(): void

@@ -17,6 +17,8 @@ use PasukanVod\PasukanVod\Data\VideoUploadPart;
 use PasukanVod\PasukanVod\Models\Video;
 use PasukanVod\PasukanVod\Models\VideoUpload;
 use PasukanVod\PasukanVod\Services\Videos\VideoLibraryService;
+use PasukanVod\PasukanVod\Services\Videos\VideoStreamService;
+use RuntimeException;
 use Throwable;
 
 class VideoUploadController extends Controller
@@ -91,8 +93,12 @@ class VideoUploadController extends Controller
         }
     }
 
-    public function complete(CompleteVideoUploadRequest $request, Video $video, VideoLibraryService $library): JsonResponse
-    {
+    public function complete(
+        CompleteVideoUploadRequest $request,
+        Video $video,
+        VideoLibraryService $library,
+        VideoStreamService $streams,
+    ): JsonResponse {
         abort_unless($video->owner_type === $request->user('web')->getMorphClass()
             && (string) $video->owner_id === (string) $request->user('web')->getKey(), 404);
         $parts = array_map(fn (array $part): VideoUploadPart => new VideoUploadPart((int) $part['part_number'], $part['etag']), $request->validated('parts'));
@@ -102,7 +108,32 @@ class VideoUploadController extends Controller
             return $this->failure($exception);
         }
 
-        return response()->json(['video_id' => $completed->id, 'edit_url' => route('admin.videos.edit', $completed)])
+        $streamStatus = null;
+        try {
+            $job = $streams->request($completed);
+            $jobId = $job['jobId'] ?? null;
+            $streamStatus = $job['status'] ?? null;
+
+            if (! is_string($jobId) || $jobId === ''
+                || ! is_string($streamStatus)
+                || ! in_array($streamStatus, ['queued', 'processing', 'completed', 'failed'], true)) {
+                throw new RuntimeException('The stream service returned an invalid job.');
+            }
+
+            $completed->forceFill(['stream_job_id' => $jobId])->save();
+        } catch (Throwable $exception) {
+            $streamStatus = null;
+            Log::warning('Automatic video stream processing could not be started', [
+                'video_id' => $completed->id,
+                'exception' => $exception::class,
+            ]);
+        }
+
+        return response()->json([
+            'video_id' => $completed->id,
+            'edit_url' => route('admin.videos.edit', $completed),
+            'stream_status' => $streamStatus,
+        ])
             ->header('Cache-Control', 'no-store');
     }
 
@@ -147,7 +178,7 @@ class VideoUploadController extends Controller
             'previous_exception' => $exception->getPrevious()?->class,
         ];
 
-        if ($exception instanceof \RuntimeException) {
+        if ($exception instanceof RuntimeException) {
             $context['failure_reason'] = match ($exception->getMessage()) {
                 'The video upload has expired.' => 'upload_expired',
                 'The video upload has an invalid size.' => 'invalid_upload_size',

@@ -2967,12 +2967,12 @@
             "source": {
                 "type": "git",
                 "url": "git@github.com:si-aji/pasukan-vod.git",
-                "reference": "6dc3224792c5867f634d051f804994b062c582c8"
+                "reference": "a50cac19ce665b908b59bd1f0946c88830d80de7"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/si-aji/pasukan-vod/zipball/6dc3224792c5867f634d051f804994b062c582c8",
-                "reference": "6dc3224792c5867f634d051f804994b062c582c8",
+                "url": "https://api.github.com/repos/si-aji/pasukan-vod/zipball/a50cac19ce665b908b59bd1f0946c88830d80de7",
+                "reference": "a50cac19ce665b908b59bd1f0946c88830d80de7",
                 "shasum": ""
             },
             "require": {
@@ -3055,7 +3055,7 @@
                 "laravel",
                 "pasukan-vod"
             ],
-            "time": "2026-11-16T00:09:58+00:00"
+            "time": "2026-11-16T05:30:31+00:00"
         },
         {
             "name": "phpoption/phpoption",

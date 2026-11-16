@@ -192,10 +192,10 @@
 .upload-progress-compact { margin-block-end: var(--space-8); background: var(--ground); }
 .upload-filename { font-size: .875rem; margin-block: var(--space-3) var(--space-6); overflow-wrap: anywhere; color: var(--muted); }
 .progress-label { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); font-size: .875rem; font-variant-numeric: tabular-nums; }
-.upload-progress progress { appearance: none; width: 100%; display: block; height: .5rem; margin-block: var(--space-3) var(--space-6); border: 0; background: var(--surface-subtle); border-radius: var(--radius-control); }
-.upload-progress progress::-webkit-progress-bar { background: var(--surface-subtle); border-radius: var(--radius-control); }
-.upload-progress progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-control); }
-.upload-progress progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-control); }
+.upload-progress progress, .stream-progress progress { appearance: none; width: 100%; display: block; height: .5rem; margin-block: var(--space-3) var(--space-6); border: 0; background: var(--surface-subtle); border-radius: var(--radius-control); }
+.upload-progress progress::-webkit-progress-bar, .stream-progress progress::-webkit-progress-bar { background: var(--surface-subtle); border-radius: var(--radius-control); }
+.upload-progress progress::-webkit-progress-value, .stream-progress progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-control); }
+.upload-progress progress::-moz-progress-bar, .stream-progress progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-control); }
 .transfer-metrics { display: grid; gap: var(--space-4); font-size: .875rem; margin-block-end: var(--space-6); }
 .transfer-metrics dt, .file-information dt { color: var(--muted); font-size: .875rem; }
 .transfer-metrics dd { font-variant-numeric: tabular-nums; margin-block-start: var(--space-1); }
@@ -207,6 +207,7 @@
 .stream-panel { grid-column: 1 / -1; }
 .stream-job { margin-block-start: var(--space-6); overflow-wrap: anywhere; }
 .stream-job p + p { margin-block-start: var(--space-3); }
+.stream-progress { margin-block-start: var(--space-4); }
 .stream-status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); }
 .stream-status-row p { margin: 0; }
 .stream-preview { margin-block-start: var(--space-6); }

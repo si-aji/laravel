@@ -52,6 +52,17 @@ export default function UploadProgress({ compact = false, onDismiss }) {
                 </dl>
             )}
             {state.phase === 'verifying' && <p className="field-hint">All bytes transferred. The server is checking the stored file; the upload is not finished yet.</p>}
+            {state.phase === 'complete' && (
+                <p role="status">
+                    {state.stream_status === 'completed'
+                        ? 'Video uploaded and playback preparation is complete.'
+                        : state.stream_status === 'failed'
+                            ? 'Video uploaded, but playback processing failed. Open video details to retry.'
+                            : state.stream_status
+                                ? 'Video uploaded. It is being prepared for playback.'
+                                : 'Video uploaded, but playback processing could not be started automatically. Open video details to retry.'}
+                </p>
+            )}
             {state.phase === 'interrupted' && <p className="field-hint">Choose the same original file on the upload page. Completed parts will not be uploaded again.</p>}
             {state.error && <p className="field-error" role="alert">{state.error}</p>}
             <div className="upload-actions">

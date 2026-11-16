@@ -142,8 +142,35 @@ class VideoController extends Controller
         return response()->json(['is_published' => $updated->is_published]);
     }
 
-    public function destroy(Request $request, Video $video, VideoLibraryService $library): JsonResponse|RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        Video $video,
+        VideoLibraryService $library,
+        VideoStreamService $streams,
+    ): JsonResponse|RedirectResponse {
+        $hasStreamJob = filled($video->stream_job_id);
+        if ($hasStreamJob) {
+            try {
+                if (! $streams->delete((string) $video->stream_job_id)) {
+                    $message = 'Wait for HLS processing to finish, then retry deleting this video.';
+
+                    return $request->expectsJson()
+                        ? response()->json(['message' => $message], 409)
+                        : back()->withErrors(['video' => $message]);
+                }
+            } catch (Throwable $exception) {
+                Log::warning('Video HLS package deletion failed', [
+                    'video_id' => $video->id,
+                    'exception' => $exception::class,
+                ]);
+                $message = 'The HLS files could not be deleted, so the video was kept. Try again.';
+
+                return $request->expectsJson()
+                    ? response()->json(['message' => $message], 503)
+                    : back()->withErrors(['video' => $message]);
+            }
+        }
+
         try {
             $library->delete($video->id);
         } catch (Throwable $exception) {
@@ -154,11 +181,14 @@ class VideoController extends Controller
                 : back()->withErrors(['video' => 'Deletion did not finish. The record has been kept so you can retry.']);
         }
 
-        $request->session()->flash('notice', 'Video and stored file deleted.');
+        $message = $hasStreamJob
+            ? 'Video, stored file, and HLS package deleted.'
+            : 'Video and stored file deleted.';
+        $request->session()->flash('notice', $message);
 
         return $request->expectsJson()
-            ? response()->json(['message' => 'Video and stored file deleted.'])
-            : to_route('admin.videos.index')->with('notice', 'Video and stored file deleted.');
+            ? response()->json(['message' => $message])
+            : to_route('admin.videos.index')->with('notice', $message);
     }
 
     /** @return array<string, mixed> */
