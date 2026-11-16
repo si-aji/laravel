@@ -7,7 +7,7 @@ const activeStatuses = ['queued', 'processing'];
 const statusLabels = {
     queued: 'Waiting to process',
     processing: 'Processing',
-    completed: 'Completed',
+    completed: 'Ready to play',
     failed: 'Failed',
 };
 
@@ -108,6 +108,15 @@ export default function VideoStreamControls({ enabled, hasJob, requestUrl, statu
                         <p role="status"><strong>Status:</strong> {statusLabels[job.status] || job.status}</p>
                         <Button disabled={checking} onClick={refresh} variant="secondary">{checking ? 'Checking…' : 'Check status'}</Button>
                     </div>
+                    {job.status === 'processing' && Number.isInteger(job.progress) && (
+                        <div className="stream-progress">
+                            <div className="progress-label">
+                                <span>HLS conversion</span>
+                                <span>{job.progress}%</span>
+                            </div>
+                            <progress aria-label="HLS conversion progress" max={100} value={job.progress} />
+                        </div>
+                    )}
                     {job.status === 'failed' && job.error?.message && <p className="field-error">{job.error.message}</p>}
                     {job.status === 'completed' && job.manifestUrl && (
                         <VideoStreamPlayer manifestUrl={job.manifestUrl} grantUrl={playbackGrantUrl} title={title} />

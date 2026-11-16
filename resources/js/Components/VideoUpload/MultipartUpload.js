@@ -250,7 +250,13 @@ export class MultipartUpload {
             const { data } = await this.api.post(this.state.session.complete_url, {
                 parts: [...this.parts].sort(([a], [b]) => a - b).map(([part_number, etag]) => ({ part_number, etag })),
             });
-            this.publish({ phase: 'complete', edit_url: data.edit_url, speed: 0, remaining: 0 });
+            this.publish({
+                phase: 'complete',
+                edit_url: data.edit_url,
+                stream_status: data.stream_status ?? null,
+                speed: 0,
+                remaining: 0,
+            });
             this.file = null;
         } catch (error) {
             this.fail(error, 'Transfer finished, but verification did not finish. ');

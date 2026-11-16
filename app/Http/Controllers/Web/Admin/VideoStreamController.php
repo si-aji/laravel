@@ -70,7 +70,7 @@ class VideoStreamController extends Controller
 
     /**
      * @param  array<string, mixed>  $job
-     * @return array{jobId: string, status: string, manifestUrl?: string|null, error?: array<string, string>|null}
+     * @return array{jobId: string, status: string, manifestUrl?: string|null, progress?: int, error?: array<string, string>|null}
      */
     private function presentJob(array $job, Video $video): array
     {
@@ -81,6 +81,10 @@ class VideoStreamController extends Controller
 
         if (($job['status'] ?? null) === 'completed' && is_string($job['manifestUrl'] ?? null)) {
             $presented['manifestUrl'] = route('admin.videos.playback.manifest', $video);
+        }
+
+        if (is_int($job['progress'] ?? null)) {
+            $presented['progress'] = min(100, max(0, $job['progress']));
         }
 
         if (array_key_exists('error', $job)) {
