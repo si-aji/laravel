@@ -2,10 +2,11 @@ import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import VideoDetailsForm from '../../../Components/VideoDetailsForm';
 import DeleteVideoButton from '../../../Components/DeleteVideoButton';
+import VideoStreamControls from '../../../Components/VideoStreamControls';
 import { formatBytes } from '../../../Components/VideoUpload/MultipartUpload';
 import { videoStatus } from './Index';
 
-export default function EditVideo({ video: initialVideo }) {
+export default function EditVideo({ video: initialVideo, stream }) {
     const [video, setVideo] = useState(initialVideo);
     return (
         <>
@@ -35,8 +36,8 @@ export default function EditVideo({ video: initialVideo }) {
                     </dl>
                     {video.status === 'uploading' && <Link className="text-link" href="/adm/videos/upload">View your unfinished uploads</Link>}
                     {video.status === 'draft' && <p className="upload-help">If this upload expired, delete the draft and start a new upload from the library.</p>}
-                    <p className="upload-help">Playback and transcoding are not available yet.</p>
                 </section>
+                {video.status === 'ready' && <VideoStreamControls {...stream} title={video.title || video.filename} />}
             </div>
         </>
     );

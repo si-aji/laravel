@@ -10,6 +10,8 @@
     "devDependencies": {
         "@inertiajs/react": "^3.11.0",
         "@tailwindcss/vite": "^4.0.0",
+        "@videojs/hlsjs-video": "^10.4.0",
+        "@videojs/react": "^10.4.0",
         "@vitejs/plugin-react": "^6.3.0",
         "anychart": "^9.0.0",
         "axios": "^1.21.1",

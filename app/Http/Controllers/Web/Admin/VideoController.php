@@ -14,6 +14,7 @@ use PasukanVod\PasukanVod\Data\VideoData;
 use PasukanVod\PasukanVod\Models\Video;
 use PasukanVod\PasukanVod\Models\VideoUpload;
 use PasukanVod\PasukanVod\Services\Videos\VideoLibraryService;
+use PasukanVod\PasukanVod\Services\Videos\VideoStreamService;
 use Throwable;
 
 class VideoController extends Controller
@@ -59,10 +60,22 @@ class VideoController extends Controller
         ]);
     }
 
-    public function edit(Video $video): Response
+    public function edit(Request $request, Video $video): Response
     {
         return Inertia::render('Admin/Videos/Edit', [
             'video' => $this->present($video->load('owner')),
+            'stream' => [
+                'enabled' => filled(config('video-ondemand.stream.endpoint'))
+                    && filled(config('video-ondemand.stream.api_token'))
+                    && filled(config('video-ondemand.stream.public_endpoint'))
+                    && filled(config('video-ondemand.stream.playback_grant_secret')),
+                'hasJob' => is_string($video->stream_job_id) && $video->stream_job_id !== '',
+                'requestUrl' => route('admin.videos.stream.store', $video),
+                'statusUrl' => route('admin.videos.stream.show', $video),
+                'playbackGrantUrl' => route('admin.videos.playback.grant', $video),
+                'publishUrl' => route('admin.videos.publication.update', $video),
+                'isPublished' => $video->is_published,
+            ],
         ]);
     }
 
@@ -81,6 +94,52 @@ class VideoController extends Controller
         return $request->expectsJson()
             ? response()->json(['video' => $this->present($updated)])
             : back()->with('notice', 'Video details saved.');
+    }
+
+    public function updatePublication(
+        Request $request,
+        Video $video,
+        VideoLibraryService $library,
+        VideoStreamService $streams,
+    ): JsonResponse {
+        $validated = $request->validate([
+            'is_published' => ['required', 'boolean'],
+        ]);
+        $isPublished = (bool) $validated['is_published'];
+
+        if ($isPublished && ($video->status !== 'ready' || ! filled($video->stream_job_id))) {
+            return response()->json(['message' => 'Complete stream processing before publishing this video.'], 409);
+        }
+
+        if ($isPublished) {
+            try {
+                $job = $streams->status($video->stream_job_id);
+            } catch (Throwable $exception) {
+                Log::warning('Video publication status check failed', [
+                    'video_id' => $video->id,
+                    'exception' => $exception::class,
+                ]);
+
+                return response()->json(['message' => 'The stream could not be verified. Check its status and try again.'], 503);
+            }
+
+            if (($job['status'] ?? null) !== 'completed' || ! is_string($job['manifestUrl'] ?? null)) {
+                return response()->json(['message' => 'Complete stream processing before publishing this video.'], 409);
+            }
+        }
+
+        try {
+            $updated = $library->setPublished($video->id, $isPublished);
+        } catch (Throwable $exception) {
+            Log::warning('Video publication update failed', [
+                'video_id' => $video->id,
+                'exception' => $exception::class,
+            ]);
+
+            return response()->json(['message' => 'The publication setting could not be saved. Try again.'], 503);
+        }
+
+        return response()->json(['is_published' => $updated->is_published]);
     }
 
     public function destroy(Request $request, Video $video, VideoLibraryService $library): JsonResponse|RedirectResponse
@@ -113,6 +172,7 @@ class VideoController extends Controller
             'mime_type' => $video->mime_type,
             'size' => $video->size,
             'status' => $video->status,
+            'is_published' => $video->is_published,
             'uploader' => $video->owner?->getAttribute('name'),
             'created_at' => $video->created_at->toIso8601String(),
             'edit_url' => route('admin.videos.edit', $video),
