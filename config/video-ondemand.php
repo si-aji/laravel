@@ -57,4 +57,13 @@ return [
     'videos' => [
         'deletion_pending_status' => 'delete_pending',
     ],
+
+    'stream' => [
+        'endpoint' => env('VIDEO_ON_DEMAND_STREAM_ENDPOINT'),
+        'api_token' => env('VIDEO_ON_DEMAND_STREAM_API_TOKEN'),
+        'public_endpoint' => env('VIDEO_ON_DEMAND_STREAM_PUBLIC_ENDPOINT'),
+        'playback_grant_secret' => env('VIDEO_ON_DEMAND_PLAYBACK_GRANT_SECRET'),
+        'playback_grant_ttl_seconds' => (int) env('VIDEO_ON_DEMAND_PLAYBACK_GRANT_TTL_SECONDS', 300),
+        'profile' => env('VIDEO_ON_DEMAND_STREAM_PROFILE', 'hls-standard'),
+    ],
 ];

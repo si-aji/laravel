@@ -6,13 +6,17 @@ Approved direction: **Neutral studio**. Light neutral surfaces, charcoal text,
 restrained green actions, and clear typography. Apply design checks during
 implementation. ENERGY 1 / RHYTHM 2 / MOTION 1.
 
-This application supports account access and an admin source-video library,
-not a finished streaming service.
+This application supports account access, an admin source-video library, and
+submitting stored videos to the configured FFmpeg HLS processing service.
+The product direction is a private, admin-managed VOD library first; public
+creator channels and social features are outside the current scope.
 The existing routes support public entry, account selection, admin sign-in,
 guest sign-in and registration, separate account dashboards, and admin video
 upload, metadata, and deletion screens. Preserve these
 routes, guard boundaries, validation, remember-me behavior, and sign-out actions.
-Do not imply that playback, transcoding, thumbnails, or analytics are available.
+Do not imply that thumbnails or analytics are available. A ready video's
+details screen can request HLS processing and preview the returned stream once
+processing completes.
 
 Evidence: `routes/web.php`, `BrowserAuthController`, and the existing Inertia
 pages. Visual decisions are project judgments approved by the user, not findings
@@ -111,7 +115,12 @@ only, so no nonfunctional theme toggle is provided.
   retains the dialog on errors. Never remove a row optimistically when deletion
   has not succeeded.
 - Incomplete and deletion-pending videos stay visible. Do not invent a thumbnail,
-  duration, playback control, publishing setting, or a zero-count metric.
+  duration, publishing setting, or a zero-count metric.
+- Stream processing belongs on the ready video's details screen. Show the real
+  queued, processing, completed, or failed state, keep a retry path for failed
+  jobs, and expose the service's manifest URL only after completion. Use native
+  HLS when available and hls.js elsewhere; keep playback controls native and do
+  not autoplay.
 
 - `Brand`: plain application name from shared Inertia props, not an invented logo.
 - `Button`: primary (green), secondary (tonal), or text; navigation stays a link.

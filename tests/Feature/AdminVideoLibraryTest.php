@@ -10,6 +10,8 @@ use Aws\Result;
 use Aws\S3\Exception\S3Exception;
 use GuzzleHttp\Psr7\Response as PsrResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -35,6 +37,15 @@ class AdminVideoLibraryTest extends TestCase
         $this->postJson('/adm/video-uploads', $this->uploadData())->assertUnauthorized();
         $this->actingAs(Guest::factory()->create(), 'guests')->get('/adm/videos')->assertRedirect('/adm/sign-in');
         $this->postJson('/adm/video-uploads', $this->uploadData())->assertUnauthorized();
+    }
+
+    public function test_stream_routes_require_an_admin_session(): void
+    {
+        $video = $this->video(User::factory()->create());
+
+        $this->postJson('/adm/videos/'.$video->id.'/stream')->assertUnauthorized();
+        $this->getJson('/adm/videos/'.$video->id.'/stream')->assertUnauthorized();
+        $this->getJson(route('admin.videos.playback.grant', $video))->assertUnauthorized();
     }
 
     public function test_library_is_shared_and_does_not_expose_storage_credentials_or_object_keys(): void
@@ -112,6 +123,143 @@ class AdminVideoLibraryTest extends TestCase
         $this->assertSame('private/lesson.mp4', $video->refresh()->path);
         $this->assertSame(100, $video->size);
         $this->assertSame('Updated description', $video->description);
+    }
+
+    public function test_admin_can_request_and_poll_a_stream_job(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test/',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+            'video-ondemand.stream.profile' => 'hls-standard',
+            'filesystems.disks.library-test.bucket' => 'source-videos',
+        ]);
+        Http::fake([
+            'stream.example.test/v1/streams' => Http::response([
+                'jobId' => 'job-123',
+                'status' => 'queued',
+                'statusUrl' => 'https://stream.example.test/v1/jobs/job-123',
+            ], 202),
+            'stream.example.test/v1/jobs/job-123' => Http::response([
+                'jobId' => 'job-123',
+                'status' => 'completed',
+                'manifestUrl' => 'https://media.example.test/hls/package/master.m3u8',
+            ]),
+        ]);
+        $video = $this->video(User::factory()->create());
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->postJson('/adm/videos/'.$video->id.'/stream')
+            ->assertAccepted()
+            ->assertJsonPath('job.jobId', 'job-123')
+            ->assertJsonPath('job.status', 'queued');
+        $this->assertSame('job-123', $video->refresh()->stream_job_id);
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->get('/adm/videos/'.$video->id.'/edit')
+            ->assertInertia(fn (Assert $page) => $page->where('stream.hasJob', true));
+
+        $this->getJson('/adm/videos/'.$video->id.'/stream')
+            ->assertOk()
+            ->assertJsonPath('job.status', 'completed')
+            ->assertJsonPath('job.manifestUrl', route('admin.videos.playback.manifest', $video));
+
+        Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://stream.example.test/v1/streams'
+            && $request->method() === 'POST'
+            && $request->hasHeader('Authorization', 'Bearer stream-test-token')
+            && $request['bucket'] === 'source-videos'
+            && $request['key'] === 'private/lesson.mp4'
+            && $request['profile'] === 'hls-standard');
+        Http::assertSent(fn (ClientRequest $request): bool => $request->url() === 'https://stream.example.test/v1/jobs/job-123'
+            && $request->method() === 'GET'
+            && $request->hasHeader('Authorization', 'Bearer stream-test-token'));
+    }
+
+    public function test_video_details_expose_stream_routes_without_exposing_the_api_token(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+            'video-ondemand.stream.public_endpoint' => 'https://vod.laravel.test',
+            'video-ondemand.stream.playback_grant_secret' => 'test-playback-grant-secret-at-least-32-chars',
+        ]);
+        $video = $this->video(User::factory()->create());
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->get('/adm/videos/'.$video->id.'/edit')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('stream.enabled', true)
+                ->where('stream.hasJob', false)
+                ->where('stream.requestUrl', route('admin.videos.stream.store', $video))
+                ->where('stream.statusUrl', route('admin.videos.stream.show', $video))
+                ->where('stream.playbackGrantUrl', route('admin.videos.playback.grant', $video))
+                ->where('stream.publishUrl', route('admin.videos.publication.update', $video))
+                ->missing('stream.api_token'));
+    }
+
+    public function test_stream_status_requires_a_persisted_job_for_the_video(): void
+    {
+        $video = $this->video(User::factory()->create());
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->getJson('/adm/videos/'.$video->id.'/stream')
+            ->assertNotFound()
+            ->assertJsonPath('message', 'No stream job has been requested for this video.');
+    }
+
+    public function test_stream_request_rejects_videos_that_are_not_ready(): void
+    {
+        $video = $this->video(User::factory()->create(), ['status' => 'draft']);
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->postJson('/adm/videos/'.$video->id.'/stream')
+            ->assertConflict();
+    }
+
+    public function test_admin_can_publish_only_a_ready_video_with_a_completed_stream(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+        ]);
+        $video = $this->video(User::factory()->create(), ['stream_job_id' => 'job-123']);
+        Http::fake([
+            'stream.example.test/v1/jobs/job-123' => Http::response([
+                'jobId' => 'job-123',
+                'status' => 'completed',
+                'manifestUrl' => 'https://stream.example.test/v1/jobs/job-123/manifest',
+            ]),
+        ]);
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->patchJson(route('admin.videos.publication.update', $video), ['is_published' => true])
+            ->assertOk()
+            ->assertJsonPath('is_published', true);
+        $this->assertTrue($video->refresh()->is_published);
+
+        $this->patchJson(route('admin.videos.publication.update', $video), ['is_published' => false])
+            ->assertOk()
+            ->assertJsonPath('is_published', false);
+    }
+
+    public function test_admin_cannot_publish_before_stream_is_completed(): void
+    {
+        config([
+            'video-ondemand.stream.endpoint' => 'https://stream.example.test',
+            'video-ondemand.stream.api_token' => 'stream-test-token',
+        ]);
+        $video = $this->video(User::factory()->create(), ['stream_job_id' => 'job-123']);
+        Http::fake([
+            'stream.example.test/v1/jobs/job-123' => Http::response([
+                'jobId' => 'job-123',
+                'status' => 'processing',
+            ]),
+        ]);
+
+        $this->actingAs(User::factory()->create(), 'web')
+            ->patchJson(route('admin.videos.publication.update', $video), ['is_published' => true])
+            ->assertConflict();
+        $this->assertFalse($video->refresh()->is_published);
     }
 
     public function test_deletion_removes_the_object_and_database_record(): void

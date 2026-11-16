@@ -12,6 +12,7 @@ export default function GuestLayout({ children }) {
                 <Brand href="/guest" />
                 <nav aria-label="Guest navigation">
                     <Link className="nav-link" href="/guest" aria-current={url.split('?')[0] === '/guest' ? 'page' : undefined}>My account</Link>
+                    <Link className="nav-link" href="/guest/videos" aria-current={url.split('?')[0].startsWith('/guest/videos') ? 'page' : undefined}>Video library</Link>
                 </nav>
                 <SignOutButton action="/guest/sign-out" />
             </header>
